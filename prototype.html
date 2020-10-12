@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        .grid-container {
+            display: grid;
+            padding: 10px;
+            gap: 10px;
+        }
+
+        .grid-item {
+            background-color: white;
+            border: 1px solid black;
+            padding: 10px;
+        }
+
+        table {
+            border-collapse: collapse;
+        }
+
+        table, th, td {
+            padding: 10px;
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body onload="init();">
+    <div class="grid-container">
+        <div class="grid-item">
+                Max dive staff: 7<br>
+                Max DM per Instructor: 2<br>
+                Max dives per staff: 4
+        </div>
+        <div class="grid-item">
+            <form id="addForm" action="">
+                <input type="text" name="name" placeholder="Dive Center Name">
+                <input type="text" name="instructorCount"  placeholder="Instructor count">
+                <input type="text" name="divemasterCount"  placeholder="Divemaster count">
+                <input type="button" value="Add Dive Center" onclick="addDC();">    
+            </form>
+        </div>
+        <div class="grid-item">
+            <form id="bookForm" action="">
+                <input type="text" name="pax" placeholder="Pax">
+                <input type="button" value="Make Booking" onclick="makeBooking();">    
+            </form>
+        </div>
+        <div class="grid-item" id="dcListDisplay"></div>
+        <div class="grid-item" id="actionLog"></div>
+    </div>
+    <script>
+        let maxDiveStaff = 7;
+        let instructorDmRatio = 2;
+        let maxDivesPerStaff = 4;
+        class DiveCenter {
+            constructor(name, instructorCount, divemasterCount) {
+                this.name = name;
+                this.instructorCount = instructorCount;
+                this.divemasterCount = divemasterCount;
+                this.maxPaxPerSlot = instructorCount + divemasterCount;
+                this.totalBookings = 0;
+                this.slotPaxCount = this.maxPaxPerSlot;
+                this.maxDives = (instructorCount + divemasterCount) * maxDivesPerStaff;
+            }
+
+            resetCount() {
+                this.slotPaxCount = this.maxPaxPerSlot;
+            }
+        }
+
+        class Node {
+            constructor(dc, prev, next) {
+                this.dc = dc;
+                this.prev = prev;
+                this.next = next;
+            }
+        }
+
+        class List {
+            constructor() {
+                this.current = null;
+                this.endNode = null;
+                this.roundCount = 1;
+            }
+
+            append(node) {
+                if(this.current == null) {
+                    node.prev = node;
+                    node.next = node;
+                    this.current = node;
+                    this.endNode = node;
+                }
+                else {
+                    node.prev = this.endNode;
+                    node.next = this.endNode.next;
+                    this.endNode.next = node;
+                    this.endNode = node;
+                }
+            }
+
+            book(pax) {
+                if(!isNaN(pax) && (pax > 0)) {
+                    actionLog(`Booking for ${pax} pax`);
+                    while(pax > 0) {
+                        if(pax >= this.current.dc.slotPaxCount) {
+                            this.current.dc.totalBookings += this.current.dc.slotPaxCount;
+                            pax -= this.current.dc.slotPaxCount;
+                            this.current.dc.resetCount();
+                            
+                            if(this.endNode == this.current) {
+                                this.roundCount++;
+                            }
+
+                            this.current = this.current.next;
+                        }
+                        else {
+                            this.current.dc.totalBookings += pax;
+                            this.current.dc.slotPaxCount -= pax;
+                            pax = 0;
+                        }
+                    }
+                }
+            }
+
+            display() {
+                if(this.current != null) {
+                    let ptr = this.current;
+                    let slot = this.roundCount;
+                    let str = '<table><tr><td>Slot</td><td>Name</td>' +
+                        '<td>Slot Bookings</td>' +
+                        '<td>Bookings for Today</td></tr>';
+                    
+                    do {
+                        str += `<tr><td>${slot}</td><td>${ptr.dc.name}</td><td>${ptr.dc.slotPaxCount}</td><td>${ptr.dc.totalBookings}</td></tr>`;
+                        if(ptr == this.endNode) {
+                            slot++;
+                        }
+                        ptr = ptr.next;
+                    } while(ptr != this.current);
+                    str += '</table>'
+                    document.getElementById('dcListDisplay').innerHTML = str;
+                }
+            }
+        }
+
+        let dcList = new List();
+        let dcNodes = [];
+
+        function add(name, instructorCount, divemasterCount) {
+            if((instructorCount + divemasterCount) > maxDiveStaff) {
+                alert(`Maximum total dive staff should not be more than ${maxDiveStaff}`);
+                return;
+            }
+
+            if((divemasterCount/2) > instructorCount) {
+                alert(`Instructor to divemaster ratio should not exceed 1:${instructorDmRatio}`);
+                return;
+            }
+
+            let dc = new DiveCenter(name, instructorCount, divemasterCount);
+            let node = new Node(dc, null, null);
+            dcNodes[name] = node;
+            dcList.append(node);
+            actionLog(`Added dive center: ${name}, instructors: ${instructorCount}, divemasters: ${divemasterCount}`);
+        }
+
+        function actionLog(str) {
+            document.getElementById('actionLog').innerHTML += '<br>' + str;    
+        }
+
+        function addDC() {
+            let name = document.forms['addForm'].name.value;
+            let instructorCount = Number(document.forms['addForm'].instructorCount.value);
+            let divemasterCount = Number(document.forms['addForm'].divemasterCount.value);
+
+            if(name.trim() == '') {
+                alert('Enter a name for dive center');
+                return;
+            }
+
+            if(dcNodes[name] != null) {
+                alert('This dive center name is already on the list');
+                return;
+            }
+
+            if(isNaN(instructorCount)) {
+                alert('Enter valid number for Instructor count');
+                return;
+            }
+
+            if(instructorCount < 1) {
+                alert('Atleast one Instructor required');
+                return;
+            }
+
+            if(isNaN(divemasterCount)) {
+                alert('Enter valid number for Divemaster count');
+                return;
+            }
+
+            add(name, instructorCount, divemasterCount);
+            dcList.display();
+        }
+
+        function makeBooking() {
+            let pax = document.forms['bookForm'].pax.value;
+
+            if(isNaN(pax)) {
+                alert('Enter valid number for Pax');
+                return;
+            }
+
+            dcList.book(pax);
+            dcList.display();
+        }
+
+        function init() {
+            add('dc1', 2, 4);
+            add('dc2', 2, 3);
+            add('dc3', 1, 2);
+            dcList.display();
+        }
+    </script>
+</body>
+</html>
